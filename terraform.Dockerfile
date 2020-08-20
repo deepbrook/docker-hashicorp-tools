@@ -5,6 +5,8 @@ ARG TERRAFORM_VERSION="0.12.22"
 WORKDIR /build
 RUN mkdir /build/bin
 
+RUN apt-get update && apt-get install -y unzip wget
+
 # Install Terraform
 RUN wget https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip; \
         unzip -ou terraform_${TERRAFORM_VERSION}_linux_amd64.zip; \

@@ -1,0 +1,22 @@
+---
+name: 'Build Container for Hashicorp Tool(s)'
+description: 'Build a new image for a single hashicorp tool, or the entire stack.'
+inputs:
+  tool_name:
+    description: |
+      Name of the hashicorp tool you'd like to build an image for. Sepcifying 'all'
+      will build an image with all tools and their latest versions available on
+      our docker hub repository.
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install deps
+      run: pip install -r docker-hashicorp-tools/requirements.txt
+      shell: bash
+    - name: Build Vagrant
+      run: cd docker-hashicorp-tools && ansible build.yml -e docker_user={{ secret.DOCKER_USER }} -e docker_pw={{ secret.DOCKER_PW }} -e tool_name={{ tool_name }}
+      shell: bash
+
+...

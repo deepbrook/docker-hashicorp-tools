@@ -1,0 +1,146 @@
+# Requires:
+#   - ``tool_name`` - name of the tool to build an image for. Specifying 'all'
+#     will build an image from all tools and their latest versions available
+#     from our docker hub repository.
+#   - ``docker_user``, ``docker_pw`` - Docker Credentials.
+#
+---
+- name: Build
+  hosts: 127.0.0.1
+  connection: local
+  vars:
+    tool_stack:
+      - vagrant
+      - packer
+      - terraform
+      - vault
+      - consul
+      - nomad
+    requires_pypi_packages:
+      - packer
+  tasks:
+    - name: Log into docker
+      docker_login:
+        username: "{{ docker_user }}"
+        password: "{{ docker_pw }}"
+        state: present
+
+    - name: Get Latest version from hashicorp
+      command: python scripts/check-version.py {{ tool_name }}
+      register: latest_hashicorp_version
+
+    - name: Get Latest version from our docker repo
+      docker_image_info:
+        name: nlsdfnbch/hashicorp-tools:{{ tool_name }}-latest
+      register: docker_info
+
+    - name: Compare Version
+      set_fact:
+        newer_version_available: "{{ (docker_info.images[1].config.labels['org.label-schema.version']|default('0.0.0')) != latest_hashicorp_version.stdout }}"
+
+    - name: Publish image
+      vars:
+        tool_version: "{{ latest_hashicorp_version.stdout }}"
+      block:
+        - name: create build dir
+          file:
+            path: ~/docker-build
+            state: directory
+
+        - name: Generate Dockerfiles for '<tool>' tag
+          vars:
+            versioned_tag: "{{ item.versioned }}"
+          template:
+            src: Dockerfile.j2
+            dest: ~/docker-build/{{ item.name }}.Dockerfile
+            mode: 0777
+          loop:
+            - versioned: yes
+              name: versioned
+            - versioned: no
+              name: latest
+
+        - name: Copy python requirements file
+          copy:
+            src: requirements.txt
+            dest: ~/docker-build/requirements.txt
+            mode: 0777
+          when: tool_name in requires_pypi_packages
+
+        - name: Download, verify and unpack Binary Archive
+          vars:
+            download_root_url: https://releases.hashicorp.com/{{ tool_name }}/{{ tool_version }}
+            archive_name: "{{ tool_name }}_{{ tool_version }}_linux_amd64.zip"
+          block:
+            - name: Fetch Checksum
+              shell:
+                cmd: curl {{ download_root_url }}/{{ tool_name }}_{{ tool_version }}_SHA256SUMS | grep {{ archive_name }}
+                warn: no
+                creates: ~/docker-build/{{ tool_name }}.zip
+              register: grepped_checksum
+
+            - name: Download Binary Archive
+              get_url:
+                url: "{{ download_root_url }}/{{ archive_name }}"
+                dest: ~/docker-build/{{ tool_name }}_{{ tool_version }}.zip
+                checksum: "sha256:{{ grepped_checksum.stdout.split(' ')[0] }}"
+                timeout: 60
+                mode: 0777
+
+            - name: Unpack Archive
+              unarchive:
+                src: ~/docker-build/{{ tool_name }}_{{ tool_version }}.zip
+                dest: ~/docker-build/
+                mode: 0777
+
+        - name: Build and tag image
+          docker_image:
+            name: nlsdfnbch/hashicorp-tools
+            tag: "{{ item.tag }}"
+            build:
+              path: ~/docker-build
+              dockerfile: "{{ item.dockerfile }}"
+              pull: yes
+              nocache: yes
+            push: no
+            force_source: yes
+            source: build
+            state: present
+          loop:
+            - tag: "{{ tool_name }}-{{ tool_version }}"
+              dockerfile: versioned.Dockerfile
+            - tag: "{{ tool_name }}"
+              dockerfile: latest.Dockerfile
+
+        - name: Get Tool container output
+          docker_container:
+            name: sleepy
+            image: nlsdfnbch/hashicorp-tools:{{ tool_name }}-{{ tool_version }}
+            command: --version
+            detach: no
+          register: container_result
+
+        - name: Assert actual version matches expected version
+          assert:
+            that: ["latest_hashicorp_version.stdout in container_result.container.Output"]
+            fail_msg: |
+              There was an error validating the tool's version in the built image:
+                Version fetched from https://releases.hashicorp.com : {{ latest_hashicorp_version.stdout }}
+                Version found in built docker image: {{ container_result.container.Output }}
+
+        - name: Push images
+          docker_image:
+            name: nlsdfnbch/hashicorp-tools:{{ item.tag }}
+            repository: nlsdfnbch/hashicorp-tools:{{ item.tag }}
+            push: yes
+            source: local
+            force_tag: yes
+            state: present
+          loop:
+            - tag: "{{ tool_name }}-{{ tool_version }}"
+            - tag: "{{ tool_name }}"
+      when: newer_version_available|bool
+    - name: Log into docker
+      docker_login:
+        state: absent
+...

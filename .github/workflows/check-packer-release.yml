@@ -1,0 +1,69 @@
+---
+name: Check for new Hashicorp Releases
+# Check once a day for new releases
+on: {schedule: [{cron: "0 0 * * *"}]}
+
+jobs:
+  build_vagrant:
+    name: Check latest release
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/docker-build
+        with: { tool_name: vagrant }
+
+  build_packer:
+    name: Check latest release
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/docker-build
+        with: { tool_name: packer }
+
+  build_terraform:
+    name: Check latest release
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/docker-build
+        with: { tool_name: terraform }
+
+  build_vault:
+    name: Check latest release
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/docker-build
+        with: { tool_name: vault }
+
+  build_consul:
+    name: Check latest release
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/docker-build
+        with: { tool_name: consul }
+
+  build_nomad:
+    name: Check latest release
+    runs-on: ubuntu-18.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/docker-build
+        with: { tool_name: nomad }
+
+  build_stack:
+    name: Check latest release
+    runs-on: ubuntu-18.04
+    needs:
+      - build_vagrant
+      - build_packer
+      - build_terraform
+      - build_vault
+      - build_consul
+      - build_nomad
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/docker-build
+        with: { tool_name: all }
+...

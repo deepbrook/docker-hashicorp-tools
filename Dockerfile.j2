@@ -1,0 +1,31 @@
+{% if tool_name == 'packer' %}
+FROM python:3.7-buster
+{% else %}
+FROM ubuntu:{{ ubuntu_version|default('18.04') }}
+{% endif %}
+
+LABEL maintainer="Nils Diefenbach <docker@deepbrook.io>"
+LABEL org.label-schema.schema-version="1.0"
+LABEL org.label-schema.name="Containerized {{ tool_name }} runtime"
+LABEL org.label-schema.description="A docker image providing a ready-to-go {{ tool_name }} binary in a docker container."
+LABEL org.label-schema.version="{{ tool_version }}"
+LABEL org.label-schema.url="https://releases.hashicorp.com/{{ tool_name }}"
+LABEL org.label-schema.vcs-url="https://github.com/deepbrook/docker-hashicorp-tools"
+{% if versioned_tag %}
+LABEL org.label-schema.docker.cmd="docker run nlsdfnbch/hashicorp-tools:{{ tool_name }}-{{ tool_version }} --help"
+{% else %}
+LABEL org.label-schema.docker.cmd="docker run nlsdfnbch/hashicorp-tools:{{ tool_name }} --help"
+{% endif %}
+
+WORKDIR /tools
+
+{% if tool_name == 'packer' %}
+COPY requirements.txt /requirements.txt
+RUN python -m pip install -r /requirements.txt
+{% endif %}
+
+COPY {{ tool_name }} /tools/{{ tool_name }}
+
+
+ENV PATH="/tools:${PATH}"
+ENTRYPOINT ["/tools/{{ tool_name }}"]

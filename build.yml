@@ -31,7 +31,7 @@
 
     - name: Get Latest version from our docker repo
       docker_image_info:
-        name: nlsdfnbch/hashicorp-tools:{{ tool_name }}-latest
+        name: nlsdfnbch/hashicorp-tools:{{ tool_name }}
       register: docker_info
 
     - name: Compare Version
